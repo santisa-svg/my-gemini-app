@@ -1,0 +1,706 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { 
+  LayoutDashboard, 
+  Users, 
+  GraduationCap, 
+  Clock, 
+  RefreshCcw, 
+  Upload, 
+  Search, 
+  Filter,
+  BookOpen,
+  UserCheck,
+  AlertTriangle,
+  FileText,
+  ChevronRight,
+  Menu,
+  X,
+  PauseCircle,
+  User,
+  UserMinus 
+} from 'lucide-react';
+import { 
+  PieChart, Pie, Cell, Tooltip as RechartsTooltip, Legend, ResponsiveContainer,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, LabelList
+} from 'recharts';
+
+// --- Helper Functions ---
+
+const parseDate = (dateStr) => {
+  if (!dateStr) return new Date();
+  const parts = dateStr.split('-');
+  if (parts.length !== 3) return new Date();
+  // parts[0] = day, parts[1] = month, parts[2] = year
+  return new Date(parts[2], parts[1] - 1, parts[0]);
+};
+
+const calculateYears = (startDate) => {
+  const start = parseDate(startDate);
+  const now = new Date();
+  const diffTime = Math.abs(now - start);
+  const diffYears = diffTime / (1000 * 60 * 60 * 24 * 365.25);
+  return diffYears;
+};
+
+const checkCritical = (startDate, degree) => {
+  const years = calculateYears(startDate);
+  if (degree === 'Master' && years > 4) return true;
+  if (degree === 'PhD' && years > 5) return true;
+  return false;
+};
+
+// Function to normalize strings (remove extra spaces)
+const normalizeName = (name) => {
+  if (!name) return "ไม่ระบุ";
+  return name.replace(/\s+/g, ' ').trim();
+};
+
+// --- REAL DATA from Uploaded CSV Files (Corrected Syntax) ---
+
+const INITIAL_MASTER_DATA = [
+  { id: "6811420001", name: "นางสาวกันยารัตน์ เส็นแหละ", advisor: "ภิมลมาศ รัตนบุรี", plan: "ก1", startDate: "23-6-2025", duration: "0ปี6เดือน", status: "กำลังศึกษา", degree: "Master" },
+  { id: "6811420002", name: "นางสาวดวงภรณ์ แดงจีน", advisor: "พิรุณรัตน์ แซ่ลิ้ม", plan: "ก2", startDate: "23-6-2025", duration: "0ปี6เดือน", status: "กำลังศึกษา", degree: "Master" },
+  { id: "6811420003", name: "นางสาวทานตะวัน ทองขำ", advisor: "ธัญญลักษณ์ ศิริยงค์", plan: "ก2", startDate: "23-6-2025", duration: "0ปี6เดือน", status: "ลาพักการศึกษา", degree: "Master" },
+  { id: "6811420005", name: "นางสาวนฤมล พิชญไวยากร", advisor: "นันทพร พรหมดำ", plan: "ก2", startDate: "23-6-2025", duration: "0ปี6เดือน", status: "กำลังศึกษา", degree: "Master" },
+  { id: "6811420006", name: "นางสาวปารีณา ร่มกลาง", advisor: "ภัทรศศิร์ เหล่าจีนวงศ์", plan: "ก2", startDate: "23-6-2025", duration: "0ปี6เดือน", status: "กำลังศึกษา", degree: "Master" },
+  { id: "6811420007", name: "นางสาวระพีพร ทองพันธ์", advisor: "จุฬาลักษณ์ โชคไพศาล", plan: "ก1", startDate: "23-6-2025", duration: "0ปี6เดือน", status: "กำลังศึกษา", degree: "Master" },
+  { id: "6811420008", name: "นางสาวศิระดา มาอินจร", advisor: "พิรุณรัตน์ แซ่ลิ้ม", plan: "ก2", startDate: "23-6-2025", duration: "0ปี6เดือน", status: "กำลังศึกษา", degree: "Master" },
+  { id: "6811420009", name: "นางสาวแวฮาลีเม๊าะ หะยีเจ๊ะเต๊ะ", advisor: "ภิมลมาศ รัตนบุรี", plan: "ก1", startDate: "23-6-2025", duration: "0ปี6เดือน", status: "กำลังศึกษา", degree: "Master" },
+  { id: "6811420010", name: "นางสาวฉัตรพร คลี่ขจาย", advisor: "อรพรรณ สกุลแก้ว", plan: "ก2", startDate: "17-11-2025", duration: "0ปี1เดือน", status: "กำลังศึกษา", degree: "Master" },
+  { id: "6711420001", name: "นางสาววรรณภา หยงสตาร์", advisor: "อรทัย เนียมสุวรรณ", plan: "ก1", startDate: "24-6-2024", duration: "1ปี6เดือน", status: "กำลังศึกษา", degree: "Master" },
+  { id: "6711420002", name: "นางสาวกัลย์ณัฐณกุล สุขประเสริฐ", advisor: "อรพรรณ สกุลแก้ว", plan: "ก2", startDate: "25-6-2024", duration: "1ปี6เดือน", status: "กำลังศึกษา", degree: "Master" },
+  { id: "6711420003", name: "นางสาวนฤพร แสงสุวรรณ์", advisor: "สุรศักดิ์ ลิ้มสุวรรณ", plan: "ก2", startDate: "26-6-2024", duration: "1ปี6เดือน", status: "ลาพักการศึกษา", degree: "Master" },
+  { id: "6611420001", name: "นางสาวกมลชนก ไชยวงค์", advisor: "จุฬาลักษณ์ โชคไพศาล", plan: "ก1", startDate: "26-6-2023", duration: "2ปี6เดือน", status: "กำลังศึกษา", degree: "Master" },
+  { id: "6611420004", name: "นางสาวฮัซวานี โต๊ะมัน", advisor: "จุุฬา วิริยะบุบผา", plan: "ก1", startDate: "26-6-2023", duration: "2ปี6เดือน", status: "กำลังศึกษา", degree: "Master" },
+  { id: "6611420005", name: "นางสาวอัซมา จารง", advisor: "จุุฬา วิริยะบุบผา", plan: "ก2", startDate: "26-6-2023", duration: "2ปี6เดือน", status: "กำลังศึกษา", degree: "Master" },
+  { id: "6611420006", name: "นางสาวจุฑามาศ บัญชาการ", advisor: "อรทัย เนียมสุวรรณ", plan: "ก1", startDate: "20-11-2023", duration: "2ปี1เดือน", status: "กำลังศึกษา", degree: "Master" },
+  { id: "6611420007", name: "นางสาวณัฐวดี ดำศรี", advisor: "ภิมลมาศ รัตนบุรี", plan: "ก1", startDate: "20-11-2023", duration: "2ปี1เดือน", status: "กำลังศึกษา", degree: "Master" },
+  { id: "6511420001", name: "นางสาวกฤษณา เกลี้ยงแก้ว", advisor: "ศิริขวัญ มณี", plan: "ก1", startDate: "27-6-2022", duration: "3ปี6เดือน", status: "กำลังศึกษา", degree: "Master" },
+  { id: "6511420003", name: "นางสาวจิรัฏฐา มั่งคั่ง", advisor: "ธัญญลักษณ์ ศิริยงค์", plan: "ก2", startDate: "27-6-2022", duration: "3ปี6เดือน", status: "กำลังศึกษา", degree: "Master" },
+  { id: "6511420010", name: "นางสาวนภัสสร พรหมฮวด", advisor: "ศิริขวัญ มณี", plan: "ก2", startDate: "27-6-2022", duration: "3ปี6เดือน", status: "จบการศึกษา", degree: "Master" },
+  { id: "6511420012", name: "นายนิอิสมาแอล ดอเลาะ", advisor: "จุุฬา วิริยะบุบผา", plan: "ก2", startDate: "27-6-2022", duration: "3ปี6เดือน", status: "กำลังศึกษา", degree: "Master" },
+  { id: "6511420016", name: "นางสาววรัญญา ตั้งกิจวรกุล", advisor: "ศิริขวัญ มณี", plan: "ก1", startDate: "27-6-2022", duration: "3ปี6เดือน", status: "ลาพักการศึกษา", degree: "Master" },
+  { id: "6511420019", name: "นางสาวณิชนันทน์ วรรณปะเถาว์", advisor: "อรทัย เนียมสุวรรณ", plan: "ก1", startDate: "27-6-2022", duration: "3ปี6เดือน", status: "กำลังศึกษา", degree: "Master" },
+  { id: "6411420005", name: "นางสาววิลาสินี บัวจันทร์", advisor: "จุฬาลักษณ์ โชคไพศาล", plan: "ก1", startDate: "21-6-2021", duration: "4ปี6เดือน", status: "กำลังศึกษา", degree: "Master" },
+  { id: "6311420003", name: "นางสาวพิมพ์ยศ วิภูษณะภัทร์", advisor: "ธัญญลักษณ์ ศิริยงค์", plan: "ก1", startDate: "13-7-2020", duration: "5ปี6เดือน", status: "กำลังศึกษา", degree: "Master" },
+  { id: "6311420007", name: "นางสาวหทัยรัตน์ จันทร์พูล", advisor: "ธัญญลักษณ์ ศิริยงค์", plan: "ก1", startDate: "30-11-2020", duration: "5ปี1เดือน", status: "จบการศึกษา", degree: "Master" },
+  { id: "6211420010", name: "นางพีชยา ปฐมพรหมมา", advisor: "อรทัย เนียมสุวรรณ", plan: "ก1", startDate: "23-12-2019", duration: "6ปี0เดือน", status: "กำลังศึกษา", degree: "Master" },
+  { id: "6211420011", name: "นางสุพรรณิกา สมคุณ", advisor: "จุฬาลักษณ์ โชคไพศาล", plan: "ก1", startDate: "23-12-2019", duration: "6ปี0เดือน", status: "กำลังศึกษา", degree: "Master" }
+];
+
+const INITIAL_PHD_DATA = [
+  { id: "6811430001", name: "นายเอกพล หมั่นพลศรี", advisor: "ธัญญลักษณ์ ศิริยงค์", plan: "1.1", startDate: "23-6-2025", duration: "0ปี6เดือน", status: "กำลังศึกษา", degree: "PhD" },
+  { id: "6811430002", name: "นางสาวธนภรณ์ ทีเหล็ก", advisor: "ธัญญลักษณ์ ศิริยงค์", plan: "1.1", startDate: "23-6-2025", duration: "0ปี6เดือน", status: "กำลังศึกษา", degree: "PhD" },
+  { id: "6811430003", name: "นางสาวบุษบามินตรา ดิฐประวรรตน์", advisor: "จอมกานต์ ณ พัทลุง", plan: "1.1", startDate: "23-6-2025", duration: "0ปี6เดือน", status: "กำลังศึกษา", degree: "PhD" },
+  { id: "6811430004", name: "นางสาวปฐมา จันทรพล", advisor: "อรทัย เนียมสุวรรณ", plan: "1.1", startDate: "23-6-2025", duration: "0ปี6เดือน", status: "กำลังศึกษา", degree: "PhD" },
+  { id: "6811430005", name: "นายศักดา ประดับ", advisor: "เสถียรพงษ์ ภูผา", plan: "1.2", startDate: "23-6-2025", duration: "0ปี6เดือน", status: "กำลังศึกษา", degree: "PhD" },
+  { id: "6811430006", name: "นางสาวปิยะนุช สุวรรณรัตน์", advisor: "พัชรวลัย ใจสมุทร", plan: "1.1", startDate: "23-6-2025", duration: "0ปี6เดือน", status: "กำลังศึกษา", degree: "PhD" },
+  { id: "6811430007", name: "นายบดินทร์ ชาตะเวที", advisor: "นงลักษณ์ กุลลวรรัตต์", plan: "1.1", startDate: "23-6-2025", duration: "0ปี6เดือน", status: "กำลังศึกษา", degree: "PhD" },
+  { id: "6811430008", name: "นางสาวปัทมา ทองธรรมชาติ", advisor: "ธัญญลักษณ์ ศิริยงค์", plan: "1.1", startDate: "17-11-2025", duration: "0ปี1เดือน", status: "กำลังศึกษา", degree: "PhD" },
+  { id: "6811430009", name: "นางสาวสุธิดา งามศรีขำ", advisor: "พัชรวลัย ใจสมุทร", plan: "1.1", startDate: "17-11-2025", duration: "0ปี1เดือน", status: "กำลังศึกษา", degree: "PhD" },
+  { id: "6711430001", name: "นางสาวสายจิต สุขหนู", advisor: "สุรศักดิ์ ลิ้มสุวรรณ", plan: "1.1", startDate: "24-6-2024", duration: "1ปี6เดือน", status: "กำลังศึกษา", degree: "PhD" },
+  { id: "6711430002", name: "นางสาวณัฐมน กลายเจริญ", advisor: "จุฬาลักษณ์ โชคไพศาล", plan: "1.2", startDate: "25-6-2024", duration: "1ปี6เดือน", status: "กำลังศึกษา", degree: "PhD" },
+  { id: "6711430003", name: "นางสาวนาบีร่า ปาทาน", advisor: "เกศริน มณีนูน", plan: "1.1", startDate: "26-6-2024", duration: "1ปี6เดือน", status: "ลาออก", degree: "PhD" },
+  { id: "6711430004", name: "นางสาวกชกร มุสิกพงษ์", advisor: "สุรศักดิ์ ลิ้มสุวรรณ", plan: "1.1", startDate: "18-11-2024", duration: "1ปี1เดือน", status: "กำลังศึกษา", degree: "PhD" },
+  { id: "6711430005", name: "นางสาวฐาปนีย์ เขียวจีน", advisor: "สุรศักดิ์ ลิ้มสุวรรณ", plan: "1.1", startDate: "18-11-2024", duration: "1ปี1เดือน", status: "กำลังศึกษา", degree: "PhD" },
+  { id: "6611430001", name: "นางสาวกัญชภัฎ มหาพรหม", advisor: "จุฬาลักษณ์ โชคไพศาล", plan: "1.2", startDate: "26-6-2023", duration: "2ปี6เดือน", status: "กำลังศึกษา", degree: "PhD" },
+  { id: "6611430002", name: "นางสาวหวันฮูดา ปะดุกา", advisor: "จุฬาลักษณ์ โชคไพศาล", plan: "1.1", startDate: "26-6-2023", duration: "2ปี6เดือน", status: "กำลังศึกษา", degree: "PhD" },
+  { id: "6611430003", name: "นางสาวชฬาฬา กุญชรินทร์", advisor: "ธัญญลักษณ์ ศิริยงค์", plan: "1.1", startDate: "20-11-2023", duration: "2ปี1เดือน", status: "กำลังศึกษา", degree: "PhD" },
+  { id: "6511430001", name: "นางสาวเกศชฎา โชติพูล", advisor: "พัชรวลัย ใจสมุทร", plan: "2.1", startDate: "27-6-2022", duration: "3ปี6เดือน", status: "กำลังศึกษา", degree: "PhD" },
+  { id: "6511430002", name: "นางสาวจันทร์เพ็ญ ธรรมพร", advisor: "สุรศักดิ์ ลิ้มสุวรรณ", plan: "1.1", startDate: "27-6-2022", duration: "3ปี6เดือน", status: "กำลังศึกษา", degree: "PhD" },
+  { id: "6511430003", name: "นางสาวนันฑิจพร พวงแก้ว", advisor: "อรทัย เนียมสุวรรณ", plan: "2.1", startDate: "27-6-2022", duration: "3ปี6เดือน", status: "กำลังศึกษา", degree: "PhD" },
+  { id: "6511430004", name: "นางสาวนูรอัสมา ปุติ", advisor: "อรทัย เนียมสุวรรณ", plan: "1.1", startDate: "27-6-2022", duration: "3ปี6เดือน", status: "กำลังศึกษา", degree: "PhD" },
+  { id: "6511430005", name: "นางสุนีย์ เจริญวุฒิธรรม", advisor: "จุุฬา วิริยะบุบผา", plan: "2.1", startDate: "27-6-2022", duration: "3ปี6เดือน", status: "กำลังศึกษา", degree: "PhD" },
+  { id: "6511430006", name: "นางสาวสุภัสสร วันสุทะ", advisor: "นันทิยา จ้อยชะรัด", plan: "1.1", startDate: "27-6-2022", duration: "3ปี6เดือน", status: "กำลังศึกษา", degree: "PhD" },
+  { id: "6511430007", name: "นางสาวสุภาพร วรรณา", advisor: "พัชรวลัย ใจสมุทร", plan: "1.1", startDate: "27-6-2022", duration: "3ปี6เดือน", status: "กำลังศึกษา", degree: "PhD" },
+  { id: "6511430008", name: "นางเสาวภา จงกิตติพงศ์", advisor: "จุฬาลักษณ์ โชคไพศาล", plan: "1.1", startDate: "27-6-2022", duration: "3ปี6เดือน", status: "กำลังศึกษา", degree: "PhD" },
+  { id: "6511430009", name: "นางสาวอรณิชา ครองยุติ", advisor: "นันทิยา จ้อยชะรัด", plan: "1.1", startDate: "27-6-2022", duration: "3ปี6เดือน", status: "กำลังศึกษา", degree: "PhD" },
+  { id: "6511430010", name: "นางสาวอรุณรัตน์ แซ่อู้", advisor: "นันทิยา จ้อยชะรัด", plan: "2.1", startDate: "27-6-2022", duration: "3ปี6เดือน", status: "กำลังศึกษา", degree: "PhD" },
+  { id: "6411430003", name: "นางสาวฮาลาห์ บิลสุลต่าน", advisor: "ภัทรศศิร์ เหล่าจีนวงศ์", plan: "1.1", startDate: "21-6-2021", duration: "4ปี6เดือน", status: "กำลังศึกษา", degree: "PhD" },
+  { id: "6311430001", name: "นางกชกร สุขจันทร์ อินทนูจิตร", advisor: "ธัญญลักษณ์ ศิริยงค์", plan: "1.1", startDate: "13-7-2020", duration: "5ปี6เดือน", status: "กำลังศึกษา", degree: "PhD" },
+  { id: "6311430002", name: "นายเจษฎา อุดมพิทยาสรรพ์", advisor: "ธัญญลักษณ์ ศิริยงค์", plan: "2.1", startDate: "13-7-2020", duration: "5ปี6เดือน", status: "กำลังศึกษา", degree: "PhD" },
+  { id: "6211430001", name: "นางสาวภัทราพร บุญมี", advisor: "ธัญญลักษณ์ ศิริยงค์", plan: "2.1", startDate: "5-8-2019", duration: "6ปี5เดือน", status: "กำลังศึกษา", degree: "PhD" }
+];
+
+const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
+const STATUS_COLORS = {
+  'กำลังศึกษา': 'bg-emerald-100 text-emerald-800 border-emerald-200',
+  'จบการศึกษา': 'bg-blue-100 text-blue-800 border-blue-200',
+  'ลาพักการศึกษา': 'bg-amber-100 text-amber-800 border-amber-200',
+  'ลาออก': 'bg-gray-100 text-gray-800 border-gray-200',
+  'พ้นสภาพ': 'bg-red-100 text-red-800 border-red-200',
+  'default': 'bg-gray-100 text-gray-800 border-gray-200'
+};
+
+export default function App() {
+  // Combine initial data and use it for state
+  const [students, setStudents] = useState([...INITIAL_MASTER_DATA, ...INITIAL_PHD_DATA]);
+  const [filteredStudents, setFilteredStudents] = useState([]);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  // Filters State
+  const [filters, setFilters] = useState({
+    degree: 'All', // All, Master, PhD
+    plan: 'All',
+    studentId: '',
+    advisor: 'All',
+    status: 'All'
+  });
+
+  // Unique Dropdown Options
+  const uniquePlans = useMemo(() => [...new Set(students.map(s => s.plan))].sort(), [students]);
+  const uniqueAdvisors = useMemo(() => {
+    // Normalize advisors for dropdown to avoid duplicates
+    const advisors = students.map(s => normalizeName(s.advisor));
+    return [...new Set(advisors)].sort();
+  }, [students]);
+  
+  const uniqueStatuses = useMemo(() => [...new Set(students.map(s => s.status))].sort(), [students]);
+
+  // Main Filtering Logic
+  useEffect(() => {
+    let result = students;
+
+    if (filters.degree !== 'All') {
+      result = result.filter(s => s.degree === filters.degree);
+    }
+    if (filters.plan !== 'All') {
+      result = result.filter(s => s.plan === filters.plan);
+    }
+    if (filters.advisor !== 'All') {
+      // Normalize comparison for filtering
+      result = result.filter(s => normalizeName(s.advisor) === filters.advisor);
+    }
+    if (filters.status !== 'All') {
+      result = result.filter(s => s.status === filters.status);
+    }
+    if (filters.studentId) {
+      result = result.filter(s => s.id.includes(filters.studentId));
+    }
+
+    setFilteredStudents(result);
+  }, [students, filters]);
+
+  // Statistics Calculation
+  const stats = useMemo(() => {
+    const total = filteredStudents.length;
+    const studying = filteredStudents.filter(s => s.status === 'กำลังศึกษา').length;
+    const graduated = filteredStudents.filter(s => s.status === 'จบการศึกษา').length;
+    const onLeave = filteredStudents.filter(s => s.status === 'ลาพักการศึกษา').length; 
+    const resigned = filteredStudents.filter(s => s.status === 'ลาออก').length;
+    
+    // Critical: Studying AND (Master > 4 years OR PhD > 5 years)
+    const criticalList = filteredStudents.filter(s => 
+      s.status === 'กำลังศึกษา' && checkCritical(s.startDate, s.degree)
+    );
+
+    return { total, studying, graduated, criticalCount: criticalList.length, onLeave, resigned, criticalList };
+  }, [filteredStudents]);
+
+  // Chart Data Preparation
+  const planData = useMemo(() => {
+    const counts = {};
+    filteredStudents.forEach(s => {
+      counts[s.plan] = (counts[s.plan] || 0) + 1;
+    });
+    return Object.keys(counts).map(key => ({ name: `แผน ${key}`, value: counts[key] }));
+  }, [filteredStudents]);
+
+  // Advisor Data (Stacked for Master/PhD, All advisors)
+  const advisorChartData = useMemo(() => {
+    const dataMap = {};
+    filteredStudents.forEach(s => {
+      // Normalize name to fix duplication issues
+      const name = normalizeName(s.advisor);
+      
+      if (!dataMap[name]) {
+        dataMap[name] = { name, Master: 0, PhD: 0, total: 0 };
+      }
+      if (s.degree === 'Master' || s.degree === 'ปริญญาโท') {
+        dataMap[name].Master = (dataMap[name].Master || 0) + 1;
+      } else {
+        dataMap[name].PhD = (dataMap[name].PhD || 0) + 1;
+      }
+      dataMap[name].total += 1;
+    });
+
+    // Sort by Total Count Descending
+    return Object.values(dataMap).sort((a, b) => b.total - a.total);
+  }, [filteredStudents]);
+
+  // Dynamic Height for Advisor Chart
+  const advisorChartHeight = Math.max(300, advisorChartData.length * 50); 
+
+  // Handlers
+  const handleFileUpload = async (event) => {
+    const files = Array.from(event.target.files);
+    if (files.length === 0) return;
+
+    let totalNewStudents = 0;
+    const allNewStudents = [];
+
+    const fileReaders = files.map(file => {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const text = e.target.result;
+          const rows = text.split('\n').map(row => row.trim()).filter(row => row);
+          
+          const studentsFromFile = [];
+          const isPhD = file.name.includes("ปริญญาเอก");
+          const degreeType = isPhD ? 'PhD' : 'Master';
+
+          // Skip header row
+          for (let i = 1; i < rows.length; i++) {
+            const cols = rows[i].split(',');
+            if (cols.length >= 7) {
+              studentsFromFile.push({
+                id: cols[0],
+                name: cols[1],
+                advisor: cols[2],
+                plan: cols[3],
+                startDate: cols[4],
+                duration: cols[5],
+                status: cols[6],
+                degree: degreeType
+              });
+            }
+          }
+          resolve(studentsFromFile);
+        };
+        reader.onerror = reject;
+        reader.readAsText(file);
+      });
+    });
+
+    try {
+      const results = await Promise.all(fileReaders);
+      results.forEach(group => {
+        allNewStudents.push(...group);
+      });
+
+      setStudents(prev => {
+        const existingIds = new Set(prev.map(p => p.id));
+        const uniqueNew = allNewStudents.filter(n => !existingIds.has(n.id));
+        totalNewStudents = uniqueNew.length;
+        return [...prev, ...uniqueNew];
+      });
+
+      alert(`อัปเดตข้อมูลจาก ${files.length} ไฟล์ เรียบร้อยแล้ว (เพิ่ม ${totalNewStudents} รายการ)`);
+    } catch (error) {
+      console.error("Error reading files:", error);
+      alert("เกิดข้อผิดพลาดในการอ่านไฟล์");
+    }
+  };
+
+  const handleRefresh = () => {
+    setFilters({
+      degree: 'All',
+      plan: 'All',
+      studentId: '',
+      advisor: 'All',
+      status: 'All'
+    });
+  };
+
+  return (
+    <div className="flex h-screen bg-slate-50 font-sans text-slate-900 overflow-hidden">
+      
+      {/* Sidebar Navigation */}
+      <aside 
+        className={`bg-white shadow-xl z-20 transition-all duration-300 flex flex-col ${sidebarOpen ? 'w-80' : 'w-0 -ml-80'} md:relative fixed h-full`}
+      >
+        <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-blue-900 text-white">
+          <div>
+            <h1 className="text-lg font-bold flex items-center gap-2">
+              <GraduationCap className="h-6 w-6 flex-shrink-0" />
+              TTMed PSU Grad Dash
+            </h1>
+            <p className="text-xs text-blue-200 mt-2 leading-relaxed">
+              ระบบฐานข้อมูลนักศึกษาบัณฑิตศึกษา <br/>
+              คณะการแพทย์แผนไทย <br/>
+              มหาวิทยาลัยสงขลานครินทร์
+            </p>
+          </div>
+          <button onClick={() => setSidebarOpen(false)} className="md:hidden">
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          
+          {/* File Upload Section */}
+          <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
+            <h3 className="text-sm font-semibold text-blue-800 mb-3 flex items-center gap-2">
+              <Upload size={16} /> อัปเดตข้อมูล CSV
+            </h3>
+            <label className="block w-full cursor-pointer">
+              <span className="sr-only">เลือกไฟล์ CSV (หลายไฟล์)</span>
+              <input 
+                type="file" 
+                accept=".csv"
+                multiple 
+                onChange={handleFileUpload}
+                className="block w-full text-sm text-slate-500
+                  file:mr-4 file:py-2 file:px-4
+                  file:rounded-full file:border-0
+                  file:text-xs file:font-semibold
+                  file:bg-blue-600 file:text-white
+                  hover:file:bg-blue-700
+                  cursor-pointer
+                "
+              />
+            </label>
+            <p className="text-xs text-slate-400 mt-2">เลือกได้หลายไฟล์พร้อมกัน (ปริญญาโท/เอก.csv)</p>
+          </div>
+
+          <div className="border-t border-slate-100 pt-4">
+             <h3 className="text-sm font-bold text-slate-700 mb-4 flex items-center gap-2">
+               <Filter size={16} /> ตัวกรองข้อมูล (Filters)
+             </h3>
+             
+             <div className="space-y-4">
+                {/* Degree Filter */}
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">ระดับการศึกษา</label>
+                  <select 
+                    value={filters.degree}
+                    onChange={(e) => setFilters({...filters, degree: e.target.value})}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  >
+                    <option value="All">ทั้งหมด (All)</option>
+                    <option value="Master">ปริญญาโท (Master)</option>
+                    <option value="PhD">ปริญญาเอก (PhD)</option>
+                  </select>
+                </div>
+
+                {/* Plan Filter */}
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">แผนการศึกษา</label>
+                  <select 
+                    value={filters.plan}
+                    onChange={(e) => setFilters({...filters, plan: e.target.value})}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none"
+                  >
+                    <option value="All">ทุกแผนการศึกษา</option>
+                    {uniquePlans.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </div>
+
+                {/* Status Filter */}
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">สถานะนักศึกษา</label>
+                  <select 
+                    value={filters.status}
+                    onChange={(e) => setFilters({...filters, status: e.target.value})}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none"
+                  >
+                    <option value="All">ทุกสถานะ</option>
+                    {uniqueStatuses.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+
+                 {/* Advisor Filter */}
+                 <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">อาจารย์ที่ปรึกษา</label>
+                  <select 
+                    value={filters.advisor}
+                    onChange={(e) => setFilters({...filters, advisor: e.target.value})}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none"
+                  >
+                    <option value="All">ทั้งหมด</option>
+                    {uniqueAdvisors.map(a => <option key={a} value={a}>{a}</option>)}
+                  </select>
+                </div>
+
+                {/* Student ID Search */}
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">ค้นหารหัสนักศึกษา</label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                    <input 
+                      type="text" 
+                      placeholder="เช่น 6611..." 
+                      value={filters.studentId}
+                      onChange={(e) => setFilters({...filters, studentId: e.target.value})}
+                      className="w-full pl-9 p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+             </div>
+          </div>
+        </div>
+
+        <div className="p-4 bg-slate-50 border-t border-slate-200">
+            <button 
+              onClick={handleRefresh}
+              className="w-full flex items-center justify-center gap-2 bg-white border border-slate-300 hover:bg-slate-100 text-slate-600 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm"
+            >
+              <RefreshCcw size={16} /> รีเซ็ตตัวกรอง
+            </button>
+        </div>
+      </aside>
+
+      {/* Main Content */}
+      <main className="flex-1 flex flex-col h-full overflow-hidden relative">
+        {/* Mobile Header */}
+        <header className="bg-white border-b border-slate-200 p-4 flex justify-between items-center sticky top-0 z-10">
+          <div className="flex items-center gap-3">
+            <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 hover:bg-slate-100 rounded-lg">
+              <Menu size={20} className="text-slate-600"/>
+            </button>
+            <div>
+              <h2 className="text-lg font-bold text-slate-800 hidden md:block">ระบบฐานข้อมูลนักศึกษาบัณฑิตศึกษา คณะการแพทย์แผนไทย ม.อ.</h2>
+              <h2 className="text-lg font-bold text-slate-800 md:hidden">TTMed PSU Grad Dash</h2>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 text-sm text-slate-500">
+             <span className="hidden md:inline">Last Update: {new Date().toLocaleDateString('th-TH')}</span>
+          </div>
+        </header>
+
+        {/* Dashboard Content */}
+        <div className="flex-1 overflow-y-auto p-4 md:p-8">
+          
+          {/* KPI Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 mb-8">
+            <StatCard 
+              title="นักศึกษาทั้งหมด" 
+              value={stats.total} 
+              icon={<Users className="text-blue-600" />} 
+              color="border-l-4 border-blue-500" 
+              bg="bg-blue-50"
+            />
+            <StatCard 
+              title="กำลังศึกษา" 
+              value={stats.studying} 
+              icon={<BookOpen className="text-emerald-600" />} 
+              color="border-l-4 border-emerald-500" 
+              bg="bg-emerald-50"
+            />
+            <StatCard 
+              title="จบการศึกษาแล้ว" 
+              value={stats.graduated} 
+              icon={<UserCheck className="text-purple-600" />} 
+              color="border-l-4 border-purple-500"
+              bg="bg-purple-50"
+            />
+            <StatCard 
+              title="ลาพักการศึกษา" 
+              value={stats.onLeave} 
+              icon={<PauseCircle className="text-amber-600" />} 
+              color="border-l-4 border-amber-500"
+              bg="bg-amber-50"
+            />
+             {/* New Resigned Card */}
+            <StatCard 
+              title="ลาออก" 
+              value={stats.resigned} 
+              icon={<UserMinus className="text-slate-600" />} 
+              color="border-l-4 border-slate-500"
+              bg="bg-slate-50"
+            />
+             <StatCard 
+              title="ใกล้พ้น/พ้นระยะเวลา" 
+              value={stats.criticalCount} 
+              subtext="(Critical Limit)"
+              icon={<AlertTriangle className="text-rose-600" />} 
+              color="border-l-4 border-rose-500"
+              bg="bg-rose-50"
+            />
+          </div>
+
+          {/* Critical Students Block */}
+          {stats.criticalList.length > 0 && (
+            <div className="mb-8 bg-rose-50 border border-rose-100 rounded-xl overflow-hidden shadow-sm">
+               <div className="p-4 bg-rose-100 border-b border-rose-200 flex items-center gap-2 text-rose-800 font-bold">
+                  <AlertTriangle size={20} />
+                  นักศึกษาที่ใกล้พ้น/พ้นระยะเวลาการศึกษา ({stats.criticalList.length} ราย)
+               </div>
+               <div className="p-4 overflow-x-auto">
+                 <table className="w-full text-left text-sm">
+                   <thead className="text-rose-700 font-semibold uppercase text-xs border-b border-rose-200">
+                     <tr>
+                        <th className="px-4 py-2">รหัสนักศึกษา</th>
+                        <th className="px-4 py-2">ชื่อ-สกุล</th>
+                        <th className="px-4 py-2">ระดับ/แผน</th>
+                        <th className="px-4 py-2">เริ่มศึกษา</th>
+                        <th className="px-4 py-2">ระยะเวลาเรียน</th>
+                     </tr>
+                   </thead>
+                   <tbody className="divide-y divide-rose-200/50 text-rose-900">
+                      {stats.criticalList.map((s, idx) => (
+                        <tr key={idx} className="hover:bg-rose-100/50">
+                          <td className="px-4 py-2 font-medium">{s.id}</td>
+                          <td className="px-4 py-2">{s.name}</td>
+                          <td className="px-4 py-2">{s.degree} / {s.plan}</td>
+                          <td className="px-4 py-2">{s.startDate}</td>
+                          <td className="px-4 py-2 font-bold">{s.duration}</td>
+                        </tr>
+                      ))}
+                   </tbody>
+                 </table>
+               </div>
+            </div>
+          )}
+
+          {/* Charts Row */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            {/* Pie Chart: Plans */}
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col">
+              <h3 className="text-md font-bold text-slate-800 mb-4 flex items-center gap-2">
+                <LayoutDashboard size={18} /> สัดส่วนตามแผนการศึกษา
+              </h3>
+              <div className="flex-1 min-h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={planData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={80}
+                      fill="#8884d8"
+                      paddingAngle={5}
+                      dataKey="value"
+                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                    >
+                      {planData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <RechartsTooltip />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Advisor Stacked Bar Chart */}
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col h-[500px]">
+              <h3 className="text-md font-bold text-slate-800 mb-4 flex items-center gap-2 flex-shrink-0">
+                <User size={18} /> จำนวนนักศึกษาตามอาจารย์ที่ปรึกษา (ทั้งหมด)
+              </h3>
+              
+              <div className="flex-1 overflow-y-auto pr-2">
+                <div style={{ height: `${advisorChartHeight}px` }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart 
+                      layout="vertical"
+                      data={advisorChartData} 
+                      margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                      <XAxis type="number" allowDecimals={false} />
+                      <YAxis 
+                        dataKey="name" 
+                        type="category" 
+                        width={140} 
+                        tick={{fontSize: 11}}
+                        interval={0}
+                      />
+                      <RechartsTooltip cursor={{fill: 'transparent'}} />
+                      <Legend verticalAlign="top" wrapperStyle={{ paddingBottom: '10px' }} />
+                      
+                      <Bar dataKey="Master" stackId="a" name="ปริญญาโท (Master)" fill="#3b82f6" barSize={25}>
+                        <LabelList dataKey="Master" position="center" fill="#fff" fontSize={10} formatter={(v) => v > 0 ? v : ''} />
+                      </Bar>
+                      <Bar dataKey="PhD" stackId="a" name="ปริญญาเอก (PhD)" fill="#a855f7" barSize={25}>
+                         <LabelList dataKey="PhD" position="center" fill="#fff" fontSize={10} formatter={(v) => v > 0 ? v : ''} />
+                         <LabelList dataKey="total" position="right" fontSize={12} fill="#64748b" />
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Data Table */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+              <h3 className="text-lg font-bold text-slate-800">รายชื่อนักศึกษาทั้งหมด ({filteredStudents.length} รายการ)</h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm text-slate-600">
+                <thead className="bg-slate-50 text-slate-700 font-semibold uppercase text-xs">
+                  <tr>
+                    <th className="px-6 py-4">รหัสนักศึกษา</th>
+                    <th className="px-6 py-4">ชื่อ-สกุล</th>
+                    <th className="px-6 py-4">ระดับ/แผน</th>
+                    <th className="px-6 py-4">อาจารย์ที่ปรึกษา</th>
+                    <th className="px-6 py-4">เริ่มศึกษา</th>
+                    <th className="px-6 py-4">ระยะเวลา</th>
+                    <th className="px-6 py-4 text-center">สถานะ</th>
+                    <th className="px-6 py-4 text-center">เตือน</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredStudents.length > 0 ? (
+                    filteredStudents.map((student, idx) => {
+                      const isCritical = checkCritical(student.startDate, student.degree);
+                      return (
+                        <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                          <td className="px-6 py-4 font-medium text-slate-900">{student.id}</td>
+                          <td className="px-6 py-4">{student.name}</td>
+                          <td className="px-6 py-4">
+                            <div className="flex flex-col">
+                              <span className="font-semibold text-xs text-blue-600">{student.degree}</span>
+                              <span>แผน {student.plan}</span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">{student.advisor}</td>
+                          <td className="px-6 py-4">{student.startDate}</td>
+                          <td className="px-6 py-4">{student.duration}</td>
+                          <td className="px-6 py-4 text-center">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${STATUS_COLORS[student.status] || STATUS_COLORS['default']}`}>
+                              {student.status}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            {isCritical && student.status === 'กำลังศึกษา' && (
+                              <div className="flex justify-center text-rose-500" title="ใกล้ครบ/เกินกำหนดระยะเวลา">
+                                <Clock size={18} />
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan="8" className="px-6 py-8 text-center text-slate-400">
+                        ไม่พบข้อมูลตามเงื่อนไขที่เลือก
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <footer className="mt-8 text-center text-xs text-slate-400 pb-4">
+            © 2025 PSU Graduate School Dashboard - Designed for internal use only.
+          </footer>
+
+        </div>
+      </main>
+    </div>
+  );
+}
+
+// Simple Stat Card Component
+const StatCard = ({ title, value, icon, color, bg, subtext }) => (
+  <div className={`bg-white rounded-xl p-6 shadow-sm border border-slate-100 relative overflow-hidden ${color}`}>
+    <div className="flex justify-between items-start">
+      <div>
+        <p className="text-sm font-medium text-slate-500 mb-1">{title}</p>
+        <h3 className="text-3xl font-bold text-slate-800">{value}</h3>
+        {subtext && <p className="text-xs text-rose-500 mt-1 font-medium">{subtext}</p>}
+      </div>
+      <div className={`p-3 rounded-lg ${bg}`}>
+        {icon}
+      </div>
+    </div>
+  </div>
+);
